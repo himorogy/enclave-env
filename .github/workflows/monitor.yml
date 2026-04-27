@@ -53,24 +53,6 @@ jobs:
             fi
           fi
 
-          # --- 2. Provenance チェック ---
-          TMPDIR=$(mktemp -d)
-          cd "$TMPDIR"
-          npm init -y > /dev/null 2>&1
-          npm install "$PACKAGE" --ignore-scripts --silent 2>/dev/null || true
-
-          AUDIT=$(npm audit signatures 2>&1)
-          VERIFIED=$(echo "$AUDIT" | \
-            grep -o '[0-9]* package.*verified attestation' | \
-            grep -o '^[0-9]*' || echo "0")
-
-          if [ "${VERIFIED:-0}" -gt 0 ]; then
-            TEXT="${TEXT}✅ Provenance 検証済み（${VERIFIED} パッケージ）\n"
-          else
-            [ "$STATUS" = "ok" ] && STATUS="warn"
-            TEXT="${TEXT}⚠️ Provenance 未確認（未 publish または署名なし）\n"
-          fi
-
           # --- Slack 通知 ---
           case "$STATUS" in
             ok)    COLOR="#36a64f"; LABEL="正常 :white_check_mark:" ;;

@@ -30,6 +30,6 @@ echo ""
 echo "v${VERSION} pushed. Starting publish..."
 echo ""
 
-# publish（npm login でブラウザが開く）
+# publish
 npm login
-npm publish --provenance --access public
+npm publish --access public

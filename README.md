@@ -278,14 +278,6 @@ git push
 pnpm release
 ```
 
-## パッケージの署名検証
-
-```sh
-npm audit signatures
-```
-
-`Verified X packages have verified attestations` と表示されれば、Sigstore による来歴証明が有効です。
-
 # ライセンス
 
 MIT
