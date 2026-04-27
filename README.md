@@ -257,6 +257,35 @@ pnpm test:ts    # TypeScript のみ
 pnpm test:sh    # シェルスクリプトのみ
 ```
 
+# 開発・リリース
+
+## CI/CD 構成
+
+| ワークフロー | トリガー | 内容 |
+|---|---|---|
+| **CI** | PR・push | lint + test |
+| **Registry Monitor** | 定期実行 | npm registry 監視 → Slack 通知 |
+
+## リリース手順
+
+```sh
+# 1. 変更を記述（対話形式で bump type と説明を入力）
+pnpm changeset add
+git commit -m "chore: add changeset"
+git push
+
+# 2. バージョン更新・git tag・publish を一括実行
+pnpm release
+```
+
+## パッケージの署名検証
+
+```sh
+npm audit signatures
+```
+
+`Verified X packages have verified attestations` と表示されれば、Sigstore による来歴証明が有効です。
+
 # ライセンス
 
 MIT

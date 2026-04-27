@@ -15,7 +15,8 @@
 		"lint": "biome ci .",
 		"test": "pnpm test:ts && pnpm test:sh",
 		"test:ts": "tsc -p tsconfig.test.json && node --test dist/test/config.test.js",
-		"test:sh": "sh tests/check.test.sh && sh tests/init-check-dev.test.sh"
+		"test:sh": "sh tests/check.test.sh && sh tests/init-check-dev.test.sh",
+		"release": "sh release.sh"
 	},
 	"dependencies": {
 		"@dotenvx/dotenvx": "^1.63.0",

@@ -1,0 +1,95 @@
+name: Registry Monitor
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # 毎日 09:00 JST
+  workflow_dispatch:       # 手動実行（テスト用）
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 全タグを取得
+
+      - name: Check registry and notify Slack
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_MONITOR_WEBHOOK_URL }}
+        run: |
+          PACKAGE="@himorogy/enclave-env"
+          STATUS="ok"
+          TEXT=""
+
+          # --- 1. バージョン整合性チェック ---
+          # npm の全バージョンと git タグを照合する
+          NPM_RAW=$(npm view "$PACKAGE" versions --json 2>/dev/null) || true
+
+          if [ -z "$NPM_RAW" ]; then
+            STATUS="warn"
+            TEXT="${TEXT}⚠️ npm registry に未 publish（または取得失敗）\n"
+          else
+            # npm view は版数が 1 つだと文字列、複数だと配列を返すため正規化
+            VERSIONS=$(echo "$NPM_RAW" | \
+              jq -r 'if type == "string" then [.] else . end | .[]')
+
+            UNEXPECTED=""
+            while IFS= read -r v; do
+              [ -z "$v" ] && continue
+              if ! git rev-parse "v${v}" >/dev/null 2>&1; then
+                UNEXPECTED="${UNEXPECTED}v${v} "
+              fi
+            done <<< "$VERSIONS"
+
+            if [ -n "$UNEXPECTED" ]; then
+              STATUS="alert"
+              TEXT="${TEXT}🚨 git tag のない npm バージョン: ${UNEXPECTED}\n"
+            else
+              LATEST=$(echo "$VERSIONS" | tail -1)
+              TEXT="${TEXT}✅ バージョン整合性 OK（最新: v${LATEST}）\n"
+            fi
+          fi
+
+          # --- 2. Provenance チェック ---
+          TMPDIR=$(mktemp -d)
+          cd "$TMPDIR"
+          npm init -y > /dev/null 2>&1
+          npm install "$PACKAGE" --ignore-scripts --silent 2>/dev/null || true
+
+          AUDIT=$(npm audit signatures 2>&1)
+          VERIFIED=$(echo "$AUDIT" | \
+            grep -o '[0-9]* package.*verified attestation' | \
+            grep -o '^[0-9]*' || echo "0")
+
+          if [ "${VERIFIED:-0}" -gt 0 ]; then
+            TEXT="${TEXT}✅ Provenance 検証済み（${VERIFIED} パッケージ）\n"
+          else
+            [ "$STATUS" = "ok" ] && STATUS="warn"
+            TEXT="${TEXT}⚠️ Provenance 未確認（未 publish または署名なし）\n"
+          fi
+
+          # --- Slack 通知 ---
+          case "$STATUS" in
+            ok)    COLOR="#36a64f"; LABEL="正常 :white_check_mark:" ;;
+            warn)  COLOR="#ff9900"; LABEL="警告 :warning:" ;;
+            alert) COLOR="#ff0000"; LABEL="異常検知 :rotating_light:" ;;
+          esac
+
+          jq -n \
+            --arg color  "$COLOR" \
+            --arg title  "npm 監視 (${PACKAGE}): ${LABEL}" \
+            --arg text   "$(printf '%b' "$TEXT")" \
+            --arg footer "$(date -u '+%Y-%m-%d %H:%M UTC')" \
+            '{attachments:[{
+              color:   $color,
+              title:   $title,
+              text:    $text,
+              footer:  $footer,
+              mrkdwn_in: ["text"]
+            }]}' \
+          | curl -fsS -X POST "$SLACK_WEBHOOK_URL" \
+              -H 'Content-Type: application/json' \
+              -d @-
