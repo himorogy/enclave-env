@@ -1,0 +1,50 @@
+{
+	"name": "@himorogy/enclave-env development container",
+	"build": {
+		"dockerfile": "Dockerfile",
+		"args": {
+			"TZ": "${localEnv:TZ:America/Los_Angeles}", // タイムゾーンをホストと同期
+			"GIT_DELTA_VERSION": "0.18.2",
+			"ZSH_IN_DOCKER_VERSION": "1.2.0"
+		}
+	},
+	"runArgs": [
+		"--name=enclave-env-dev-container",
+		"--cap-add=NET_ADMIN",
+		"--cap-add=NET_RAW"
+	],
+	"customizations": {
+		"vscode": {
+			"extensions": ["anthropic.claude-code", "biomejs.biome"],
+			"settings": {
+				"terminal.integrated.defaultProfile.linux": "zsh",
+				"terminal.integrated.profiles.linux": {
+					"bash": {
+						"path": "bash",
+						"icon": "terminal-bash"
+					},
+					"zsh": {
+						"path": "zsh"
+					}
+				}
+			}
+		}
+	},
+	"remoteUser": "node",
+	"mounts": [
+		// ターミナルの履歴を永続化。前回のAI実行コマンドを Ctrl+R で即座に呼び出せる
+		"source=claude-code-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
+		// 認証情報や設定を永続化。再ビルドしても再ログイン不要
+		"source=claude-code-config-${devcontainerId},target=/home/node/.claude,type=volume"
+	],
+	"containerEnv": {
+		"NODE_OPTIONS": "--max-old-space-size=2048",
+		"CLAUDE_CONFIG_DIR": "/home/node/.claude",
+		"POWERLEVEL9K_DISABLE_GITSTATUS": "true" // シェルの描画負荷を軽減
+	},
+	"workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=delegated",
+	"workspaceFolder": "/workspace",
+	"postCreateCommand": "curl -fsSL https://claude.ai/install.sh | bash && echo \"alias claude='/home/node/.local/bin/claude --plugin-dir ~/.claude-personal-plugin'\" >> ~/.zshrc",
+	"postStartCommand": "sudo /usr/local/bin/init-firewall.sh",
+	"waitFor": "postStartCommand"
+}
