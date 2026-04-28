@@ -93,9 +93,7 @@ test("checkDevContainerNotRunning: skips check when DEVCONTAINER=true", () => {
 	process.env.DEVCONTAINER = "true";
 	try {
 		withFakeDocker("my-dev", () => {
-			const code = captureExit(() =>
-				checkDevContainerNotRunning("my-dev"),
-			);
+			const code = captureExit(() => checkDevContainerNotRunning("my-dev"));
 			assert.equal(code, undefined);
 		});
 	} finally {
@@ -109,9 +107,7 @@ test("checkDevContainerNotRunning: exits 1 when dev container is running", () =>
 	delete process.env.DEVCONTAINER;
 	try {
 		withFakeDocker("my-dev", () => {
-			const code = captureExit(() =>
-				checkDevContainerNotRunning("my-dev"),
-			);
+			const code = captureExit(() => checkDevContainerNotRunning("my-dev"));
 			assert.equal(code, 1);
 		});
 	} finally {
