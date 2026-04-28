@@ -6,7 +6,7 @@ import { test } from "node:test";
 import {
 	checkContainerNotRunning,
 	checkDevContainerNotRunning,
-} from "./security.js";
+} from "../src/security.js";
 
 function withFakeDocker(containerName: string, fn: () => void): void {
 	const dir = mkdtempSync(join(tmpdir(), "fake-docker-"));
