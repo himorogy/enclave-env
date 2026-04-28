@@ -1,5 +1,9 @@
 #!/bin/sh
 # Tests for scripts/init-check-prod.sh
+#
+# init-check-prod.sh は prod コンテナ起動時に dev コンテナが稼働していないかを確認する。
+# docker ps の呼び出しを fake binary（PATH 先頭に挿入）でモックすることで
+# Docker デーモンなしにコンテナ稼働・未稼働の両ケースをテストできる。
 
 SCRIPT_DIR=$(cd "$(dirname "$0")/.." && pwd)
 SCRIPT="$SCRIPT_DIR/scripts/init-check-prod.sh"
@@ -20,6 +24,8 @@ assert_exit() {
   fi
 }
 
+# fake_bin を PATH 先頭に挿入して run する。
+# fake_bin が空文字のときは通常の PATH でそのまま実行する（docker 不使用のケース）。
 run() {
   dir=$1
   fake_bin=$2
@@ -30,6 +36,9 @@ run() {
   fi
 }
 
+# 指定した出力を返す fake docker binary を一時ディレクトリに作成して返す。
+# output が空のとき docker ps は何も出力しない（コンテナ未稼働を再現）。
+# output が文字列のとき docker ps はその名前を出力する（コンテナ稼働を再現）。
 make_fake_docker() {
   output=$1
   dir=$(mktemp -d)
@@ -42,20 +51,21 @@ make_fake_docker() {
   echo "$dir"
 }
 
-# no enclave-env → exit 0 (skip with warning)
+# enclave-env 未設定のプロジェクトで誤ってブロックしないことを確認。
 WORK=$(mktemp -d)
 run "$WORK"
 assert_exit "no enclave-env → exit 0" 0 $?
 rm -rf "$WORK"
 
-# DEV_CONTAINER_NAME not set → exit 0
+# DEV_CONTAINER_NAME が設定されていなければ docker チェック自体をスキップする。
+# 2層 devcontainer を使わない構成では相互排他チェック不要。
 WORK=$(mktemp -d)
 printf 'MODE=single\n' > "$WORK/enclave-env"
 run "$WORK"
 assert_exit "DEV_CONTAINER_NAME not set → exit 0" 0 $?
 rm -rf "$WORK"
 
-# DEV_CONTAINER_NAME set, container not running → exit 0
+# dev コンテナが停止していれば prod コンテナを起動してよい（正常系）。
 WORK=$(mktemp -d)
 printf 'MODE=single\nDEV_CONTAINER_NAME=my-dev\n' > "$WORK/enclave-env"
 FAKE=$(make_fake_docker "")
@@ -63,7 +73,8 @@ run "$WORK" "$FAKE"
 assert_exit "dev container not running → exit 0" 0 $?
 rm -rf "$WORK" "$FAKE"
 
-# DEV_CONTAINER_NAME set, container running → exit 1
+# dev コンテナが稼働中なら prod コンテナの起動をブロックする（主要な脅威）。
+# dev コンテナが動いたまま prod 操作を行うと、復号した平文を LLM が参照できてしまう。
 WORK=$(mktemp -d)
 printf 'MODE=single\nDEV_CONTAINER_NAME=my-dev\n' > "$WORK/enclave-env"
 FAKE=$(make_fake_docker "my-dev")
