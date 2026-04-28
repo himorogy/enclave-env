@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { loadConfig, resolveEnvFile } from "./config.js";
+import { loadConfig, resolveEnvFile } from "../src/config.js";
 
 function withTempDir(fn: (dir: string) => void): void {
 	const dir = mkdtempSync(join(tmpdir(), "enclave-env-test-"));

@@ -14,8 +14,8 @@
 		"format": "biome check --write .",
 		"lint": "biome ci .",
 		"test": "pnpm test:ts && pnpm test:sh",
-		"test:ts": "tsc -p tsconfig.test.json && node --test dist/test/config.test.js",
-		"test:sh": "sh tests/check.test.sh && sh tests/init-check-dev.test.sh",
+		"test:ts": "tsc -p tsconfig.test.json && node --test dist/test/tests/config.test.js dist/test/tests/security.test.js",
+		"test:sh": "sh tests/check.test.sh && sh tests/init-check-dev.test.sh && sh tests/init-check-prod.test.sh",
 		"release": "sh release.sh"
 	},
 	"dependencies": {
