@@ -12,6 +12,8 @@
 # ため、`bash -i` / `zsh -i` の子プロセスとして起動することで
 # `case $- in *i*)` が真になる状態を作る。`-i` は「ジョブ制御を持てない」
 # 旨の警告を stderr に出すが、これはテストの対象ではないので無視する。
+# 起動シェルの rc (この環境では /etc/bash.bashrc) が stdout へ出す行を検査が
+# 拾うと空振り緑になるため、bash には --norc、zsh には --no-rcs を必ず付ける。
 #
 set -uo pipefail
 
@@ -87,7 +89,7 @@ make_karakuri_context "$t"
 marker="SUPERSECRETVALUE_MARKER_$$"
 printf '%s\n' "$marker" >"$t/secrets/DOTENV_PRIVATE_KEY_LOCAL"
 printf 'not-a-secret-value\n' >"$t/secrets/GH_TOKEN"
-out="$(bash -i -c ". $t/karakuri-context" 2>/dev/null)"
+out="$(bash --norc -i -c ". $t/karakuri-context" 2>/dev/null)"
 rc=$?
 if [ "$rc" -eq 0 ] &&
 	printf '%s\n' "$out" | grep -q "DOTENV_PRIVATE_KEY_LOCAL" &&
@@ -108,7 +110,7 @@ if [ "$HAVE_ZSH" -eq 1 ]; then
 	make_karakuri_context "$t"
 	marker="SUPERSECRETVALUE_MARKER_ZSH_$$"
 	printf '%s\n' "$marker" >"$t/secrets/DOTENV_PRIVATE_KEY_LOCAL"
-	out="$(zsh -i -c ". $t/karakuri-context" 2>/dev/null)"
+	out="$(zsh --no-rcs -i -c ". $t/karakuri-context" 2>/dev/null)"
 	rc=$?
 	if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q "DOTENV_PRIVATE_KEY_LOCAL"; then
 		ok "対話相当 (zsh -i) でファイル名が出る"
@@ -129,15 +131,15 @@ fi
 t="$(mktemp -d)"
 make_karakuri_context "$t"
 # 空ディレクトリ
-out="$(bash -i -c ". $t/karakuri-context" 2>/dev/null)"
-if printf '%s\n' "$out" | grep -q "karakuri-context:" && printf '%s\n' "$out" | grep -qi "無い"; then
+out="$(bash --norc -i -c ". $t/karakuri-context" 2>/dev/null)"
+if printf '%s\n' "$out" | grep -q "karakuri-context:" && printf '%s\n' "$out" | grep -qi "no injected keys"; then
 	ok "/run/secrets が空のとき専用の1行が出る"
 else
 	ng "/run/secrets が空のとき専用の1行が出る (out=$out)"
 fi
 rm -rf "$t/secrets"
-out="$(bash -i -c ". $t/karakuri-context" 2>/dev/null)"
-if printf '%s\n' "$out" | grep -q "karakuri-context:" && printf '%s\n' "$out" | grep -qi "無い"; then
+out="$(bash --norc -i -c ". $t/karakuri-context" 2>/dev/null)"
+if printf '%s\n' "$out" | grep -q "karakuri-context:" && printf '%s\n' "$out" | grep -qi "no injected keys"; then
 	ok "/run/secrets が不在のとき専用の1行が出る"
 else
 	ng "/run/secrets が不在のとき専用の1行が出る (out=$out)"
@@ -157,12 +159,17 @@ for sh_bin in bash zsh; do
 		printf '  skip %s\n' "/run/secrets が存在して空でも glob エラーにならない (zsh): zsh 不在のため未検証"
 		continue
 	fi
+	case "$sh_bin" in
+	bash) norc_flag=--norc ;;
+	zsh) norc_flag=--no-rcs ;;
+	*) ng "未対応のシェル: $sh_bin"; continue ;;
+	esac
 	t="$(mktemp -d)"
 	make_karakuri_context "$t"
 	# secrets ディレクトリは作るが中身は置かない (mkdir は make_karakuri_context 済み)
 	printf 'GIT_REF=main\nGIT_COMMIT=4f3a9c2b00112233445566778899aabbccddeeff\nMUTABLE_REF=0\n' >"$t/prod-ref"
 	err_file="$t/stderr.log"
-	out="$("$sh_bin" -i -c ". $t/karakuri-context" 2>"$err_file")"
+	out="$("$sh_bin" "$norc_flag" -i -c ". $t/karakuri-context" 2>"$err_file")"
 	rc=$?
 	err="$(cat "$err_file")"
 	if [ "$rc" -eq 0 ] && ! printf '%s\n' "$err" | grep -qi "no matches found"; then
@@ -170,7 +177,7 @@ for sh_bin in bash zsh; do
 	else
 		ng "/run/secrets が存在して空でも glob エラーが出ない ($sh_bin -i) (rc=$rc err=$err)"
 	fi
-	if printf '%s\n' "$out" | grep -qi "無い" && printf '%s\n' "$out" | grep -q "GIT_REF=main"; then
+	if printf '%s\n' "$out" | grep -qi "no injected keys" && printf '%s\n' "$out" | grep -q "GIT_REF=main"; then
 		ok "/run/secrets が存在して空でも後続の /run/prod-ref 行まで到達する ($sh_bin -i)"
 	else
 		ng "/run/secrets が存在して空でも後続の /run/prod-ref 行まで到達する ($sh_bin -i) (out=$out)"
@@ -182,7 +189,7 @@ done
 t="$(mktemp -d)"
 make_karakuri_context "$t"
 printf 'GIT_REF=main\nGIT_COMMIT=4f3a9c2b00112233445566778899aabbccddeeff\nMUTABLE_REF=1\n' >"$t/prod-ref"
-out="$(bash -i -c ". $t/karakuri-context" 2>/dev/null)"
+out="$(bash --norc -i -c ". $t/karakuri-context" 2>/dev/null)"
 if printf '%s\n' "$out" | grep -q "GIT_REF=main" &&
 	printf '%s\n' "$out" | grep -q "4f3a9c2b00112233445566778899aabbccddeeff" &&
 	printf '%s\n' "$out" | grep -q "mutable ref"; then
@@ -195,7 +202,7 @@ rm -rf "$t"
 # --- 4b. /run/prod-ref が無ければ、その旨の出力もない -----------------------------
 t="$(mktemp -d)"
 make_karakuri_context "$t"
-out="$(bash -i -c ". $t/karakuri-context" 2>/dev/null)"
+out="$(bash --norc -i -c ". $t/karakuri-context" 2>/dev/null)"
 if ! printf '%s\n' "$out" | grep -qi "GIT_REF"; then
 	ok "/run/prod-ref が無ければ GIT_REF 行は出ない"
 else
@@ -212,7 +219,7 @@ t="$(mktemp -d)"
 make_karakuri_context "$t"
 printf '#!/bin/sh\necho AUTH_CHECK_RAN\n' >"$t/git-auth-check"
 chmod +x "$t/git-auth-check"
-out="$(bash -i -c ". $t/karakuri-context" 2>/dev/null)"
+out="$(bash --norc -i -c ". $t/karakuri-context" 2>/dev/null)"
 if printf '%s\n' "$out" | grep -q "AUTH_CHECK_RAN"; then
 	ok "対話シェルの起動で git-auth-check が呼ばれる"
 else
@@ -226,7 +233,7 @@ t="$(mktemp -d)"
 make_karakuri_context "$t"
 printf '#!/bin/sh\necho AUTH_CHECK_RAN\n' >"$t/git-auth-check"
 chmod -x "$t/git-auth-check"
-out="$(bash -i -c ". $t/karakuri-context" 2>/dev/null)"
+out="$(bash --norc -i -c ". $t/karakuri-context" 2>/dev/null)"
 if ! printf '%s\n' "$out" | grep -q "AUTH_CHECK_RAN"; then
 	ok "否定対照: 実行可能でなければ git-auth-check は呼ばれない"
 else
@@ -240,7 +247,7 @@ make_karakuri_context "$t"
 printf 'x\n' >"$t/secrets/FOO"
 printf '#!/bin/sh\necho boom >&2\nexit 1\n' >"$t/git-auth-check"
 chmod +x "$t/git-auth-check"
-out="$(bash -i -c "set -e; . $t/karakuri-context; echo AFTER_SOURCE_OK" 2>/dev/null)"
+out="$(bash --norc -i -c "set -e; . $t/karakuri-context; echo AFTER_SOURCE_OK" 2>/dev/null)"
 rc=$?
 if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q "AFTER_SOURCE_OK" &&
 	printf '%s\n' "$out" | grep -q "FOO"; then
@@ -258,7 +265,7 @@ rm -rf "$t"
 t="$(mktemp -d)"
 make_karakuri_context "$t"
 rm -rf "$t/secrets"
-out="$(bash -i -c "set -e; . $t/karakuri-context; echo AFTER_SOURCE_OK" 2>/dev/null)"
+out="$(bash --norc -i -c "set -e; . $t/karakuri-context; echo AFTER_SOURCE_OK" 2>/dev/null)"
 rc=$?
 if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q "AFTER_SOURCE_OK"; then
 	ok "set -e なシェルで source してもシェルを壊さず後続コマンドまで到達する"

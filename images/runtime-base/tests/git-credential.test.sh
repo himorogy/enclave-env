@@ -600,9 +600,9 @@ rm -rf "$t"
 # イメージ固定が外れている (cfg=off) 場合、実効 helper が別物でも空でも、
 # 報告からその別が読める必要がある。固定が生きている場合の報告 ($out) とは
 # 区別できることも併せて見る。
-if printf '%s\n' "$other" | grep -q "外れている" &&
-	printf '%s\n' "$none" | grep -q "外れている" &&
-	! printf '%s\n' "$out" | grep -q "外れている"; then
+if printf '%s\n' "$other" | grep -q "broken" &&
+	printf '%s\n' "$none" | grep -q "broken" &&
+	! printf '%s\n' "$out" | grep -q "broken"; then
 	ok "イメージ固定が外れていれば報告にその別が付く (実効 helper が別物でも空でも)"
 else
 	ng "イメージ固定が外れていれば報告にその別が付く (other=$other none=$none out=$out)"
@@ -630,7 +630,7 @@ extended="$(env -u GIT_CONFIG_COUNT -u GIT_CONFIG_KEY_0 -u GIT_CONFIG_VALUE_0 \
 	sh "$t/git-auth-check" 2>&1)"
 rc=$?
 if [ "$rc" -eq 0 ] && printf '%s\n' "$extended" | grep -q "$HELPER" &&
-	! printf '%s\n' "$extended" | grep -q "外れている"; then
+	! printf '%s\n' "$extended" | grep -q "broken"; then
 	ok "利用側が案内どおりに COUNT を増やして足しても固定は生きている扱いになる"
 else
 	ng "利用側が案内どおりに COUNT を増やして足しても固定は生きている扱いになる (rc=$rc out=$extended)"
@@ -650,7 +650,7 @@ tampered="$(env -u GIT_CONFIG_COUNT -u GIT_CONFIG_KEY_0 -u GIT_CONFIG_VALUE_0 \
 	"GIT_CONFIG_KEY_1=credential.helper" "GIT_CONFIG_VALUE_1=$HELPER" \
 	sh "$t/git-auth-check" 2>&1)"
 rc=$?
-if [ "$rc" -eq 0 ] && printf '%s\n' "$tampered" | grep -q "外れている"; then
+if [ "$rc" -eq 0 ] && printf '%s\n' "$tampered" | grep -q "broken"; then
 	ok "5本のうち1本だけ別物にすり替わっていても固定は外れている扱いになる"
 else
 	ng "5本のうち1本だけ別物にすり替わっていても固定は外れている扱いになる (rc=$rc out=$tampered)"

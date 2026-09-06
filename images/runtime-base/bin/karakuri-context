@@ -75,11 +75,11 @@ esac
 	fi
 
 	if [ -n "$names" ]; then
-		echo "karakuri-context: 注入済み:$names"
+		echo "karakuri-context: injected:$names"
 	else
 		# /run/secrets が無い、または空。dev で鍵が入っていないことに
 		# ここで気づけるようにする一行。
-		echo "karakuri-context: /run/secrets に注入済みの鍵が無い"
+		echo "karakuri-context: /run/secrets has no injected keys"
 	fi
 
 	# /run/prod-ref は prod-entrypoint.sh が GIT_REF= / GIT_COMMIT= /
