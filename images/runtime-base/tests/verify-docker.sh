@@ -2314,9 +2314,9 @@ a6_auth_check() {
 		alive="$(git-auth-check 2>&1)"
 		[ -n "$alive" ] || exit 1
 		printf "%s\n" "$alive" | grep -q "git-credential-gh-token" || exit 2
-		printf "%s\n" "$alive" | grep -q "生きている" || exit 3
+		printf "%s\n" "$alive" | grep -q "alive" || exit 3
 		broken="$(env -u GIT_CONFIG_COUNT -u GIT_CONFIG_KEY_0 -u GIT_CONFIG_VALUE_0 -u GIT_CONFIG_KEY_1 -u GIT_CONFIG_VALUE_1 git-auth-check 2>&1)"
-		printf "%s\n" "$broken" | grep -q "外れている" || exit 4
+		printf "%s\n" "$broken" | grep -q "broken" || exit 4
 	'
 }
 assert M6 "git-auth-check が実効 helper のパスと固定の生死を常に1行報告する" a6_auth_check

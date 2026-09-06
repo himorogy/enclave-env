@@ -61,9 +61,9 @@ if [ -r /proc/mounts ]; then
   case "$src_mount_line" in
     *noexec*)
       echo "prod-entrypoint: /src is mounted noexec: $src_mount_line" >&2
-      echo "prod-entrypoint:   compose の /src tmpfs マウントに 'exec' オプションの明示が必要" >&2
-      echo "prod-entrypoint:   (例: tmpfs: [\"/src:exec,uid=1000,gid=1000,mode=0755\"])。" >&2
-      echo "prod-entrypoint:   docker の tmpfs は既定で noexec が付き、uid=/gid=/mode= を渡しても消えない" >&2
+      echo "prod-entrypoint:   compose's /src tmpfs mount needs an explicit 'exec' option" >&2
+      echo "prod-entrypoint:   (example: tmpfs: [\"/src:exec,uid=1000,gid=1000,mode=0755\"])" >&2
+      echo "prod-entrypoint:   docker tmpfs defaults to noexec; passing uid=/gid=/mode= does not remove it" >&2
       exit 1
       ;;
   esac
@@ -118,20 +118,20 @@ if [ -r /proc/mounts ]; then
 
     if [ -z "$mnt_line" ]; then
       echo "prod-entrypoint: WARNING: cannot verify that $mnt_target is a tmpfs: no such mountpoint in /proc/mounts" >&2
-      echo "prod-entrypoint:   検査を実施できないまま続行する（この検査は防壁なので黙ってスキップしない）" >&2
+      echo "prod-entrypoint:   proceeding without this check (it is a safety guard; it does not skip silently)" >&2
     elif [ "$mnt_fstype" != tmpfs ]; then
       echo "prod-entrypoint: $mnt_target is not a tmpfs: fstype=$mnt_fstype" >&2
       echo "prod-entrypoint:   mount line: $mnt_line" >&2
-      echo "prod-entrypoint:   expected: tmpfs（/src は起動ごとに git から復元する使い捨てであり、" >&2
-      echo "prod-entrypoint:   secret の置き場には平文の secret が載る。いずれもホストの不揮発" >&2
-      echo "prod-entrypoint:   ディスクへ残してはならない）" >&2
-      echo "prod-entrypoint:   compose に $mnt_target を指す volumes: / bind mount が足されていないか確認する" >&2
+      echo "prod-entrypoint:   expected: tmpfs (/src is disposable and restored from git on every startup;" >&2
+      echo "prod-entrypoint:   the secrets location holds a plaintext secret; neither may remain on the" >&2
+      echo "prod-entrypoint:   host's non-volatile disk)" >&2
+      echo "prod-entrypoint:   check whether compose adds a volumes: / bind mount pointing at $mnt_target" >&2
       exit 1
     fi
   done
 else
   echo "prod-entrypoint: WARNING: cannot verify that /src and $secrets_parent are tmpfs: /proc/mounts is not readable" >&2
-  echo "prod-entrypoint:   検査を実施できないまま続行する（この検査は防壁なので黙ってスキップしない）" >&2
+  echo "prod-entrypoint:   proceeding without this check (it is a safety guard; it does not skip silently)" >&2
 fi
 
 # --- GIT_REPO: URL への資格情報の埋め込みを拒否 ---------------------------------
@@ -150,10 +150,10 @@ fi
 case "$GIT_REPO" in
   *://*@*)
     echo "prod-entrypoint: GIT_REPO must not embed credentials in the URL" >&2
-    echo "prod-entrypoint:   URL に埋めた資格情報は remote set-url により .git/config へ残り、" >&2
-    echo "prod-entrypoint:   exec 後に走る信頼しないコードから git config で読める" >&2
-    echo "prod-entrypoint:   認証は stdin で渡した GH_TOKEN を GIT_ASKPASS 経由で使う設計なので、" >&2
-    echo "prod-entrypoint:   GIT_REPO には資格情報を含まない URL を渡す" >&2
+    echo "prod-entrypoint:   credentials embedded in the URL remain in .git/config via remote set-url," >&2
+    echo "prod-entrypoint:   readable via git config by the untrusted code that runs after exec" >&2
+    echo "prod-entrypoint:   authentication is designed to use the GH_TOKEN passed over stdin via" >&2
+    echo "prod-entrypoint:   GIT_ASKPASS, so pass GIT_REPO a URL that does not embed credentials" >&2
     exit 1
     ;;
 esac
@@ -210,10 +210,10 @@ esac
 if [ "$mutable" -eq 1 ]; then
   if [ "${PROD_ALLOW_MUTABLE_REF:-}" = 1 ]; then
     echo "prod-entrypoint: WARNING: GIT_REF is not a full commit sha: $GIT_REF" >&2
-    echo "prod-entrypoint:   可変 ref はレビュー対象と実行対象の一致を保証しない" >&2
+    echo "prod-entrypoint:   a mutable ref does not guarantee that what was reviewed matches what runs" >&2
   else
     echo "prod-entrypoint: GIT_REF must be a full 40-character commit sha: $GIT_REF" >&2
-    echo "prod-entrypoint:   意図する場合は PROD_ALLOW_MUTABLE_REF=1 を設定する" >&2
+    echo "prod-entrypoint:   set PROD_ALLOW_MUTABLE_REF=1 if this is intended" >&2
     exit 1
   fi
 fi
@@ -256,8 +256,8 @@ if [ "$mutable" -eq 0 ]; then
   if [ "$git_ref_lc" != "$commit" ]; then
     echo "prod-entrypoint: GIT_REF looks like a commit sha but resolved to a different object: $GIT_REF" >&2
     echo "prod-entrypoint:   resolved to: $commit" >&2
-    echo "prod-entrypoint:   同じ 40 桁 hex を名前とするブランチ/タグが upstream に存在すると" >&2
-    echo "prod-entrypoint:   この形になる。可変 ref の内容が immutable な sha として実行される" >&2
+    echo "prod-entrypoint:   this happens when upstream has a branch/tag named with the same" >&2
+    echo "prod-entrypoint:   40-digit hex; a mutable ref's contents then run as an immutable sha" >&2
     exit 1
   fi
 fi
@@ -316,8 +316,8 @@ git -C /src clean -xdff
 # 何を期待していて何が実際かを名指しで出してから落とす。
 if [ ! -w "$HOME" ] || ! mkdir -p "$HOME/.config/pnpm" 2>/dev/null; then
   echo "prod-entrypoint: \$HOME is not writable: $HOME" >&2
-  echo "prod-entrypoint:   expected: a writable tmpfs at \$HOME (compose の /home/node tmpfs 指定、" >&2
-  echo "prod-entrypoint:   uid=/gid= が実行 uid と一致していること) so that" >&2
+  echo "prod-entrypoint:   expected: a writable tmpfs at \$HOME (compose's /home/node tmpfs setting," >&2
+  echo "prod-entrypoint:   with uid=/gid= matching the running uid) so that" >&2
   echo "prod-entrypoint:   the store-dir config (\$HOME/.config/pnpm/config.yaml) can be written" >&2
   echo "prod-entrypoint:   actual: mkdir -p \"\$HOME/.config/pnpm\" failed (see compose tmpfs / uid config)" >&2
   exit 1

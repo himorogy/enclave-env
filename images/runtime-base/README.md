@@ -188,9 +188,9 @@ push されたイメージに対しても CI の smoke test が同じ検証を�
 
 ```
 $ docker exec -it <container> bash
-karakuri-context: 注入済み: DOTENV_PRIVATE_KEY_LOCAL GH_TOKEN
+karakuri-context: injected: DOTENV_PRIVATE_KEY_LOCAL GH_TOKEN
 karakuri-context: GIT_REF=main GIT_COMMIT=4f3a9c2b8e1d7a05... (mutable ref)
-git-auth-check: 実効 helper=/usr/local/bin/git-credential-gh-token / イメージ固定: 生きている
+git-auth-check: effective helper=/usr/local/bin/git-credential-gh-token; image fixation: alive
 ```
 
 これが効くのは主に dev である。`DOTENV_PRIVATE_KEY_LOCAL` は持つが `_DEVELOPMENT` は持たない、
