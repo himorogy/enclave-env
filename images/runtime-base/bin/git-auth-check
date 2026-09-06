@@ -53,17 +53,17 @@ is_set GIT_CONFIG_KEY_1 && [ "$GIT_CONFIG_KEY_1" = "$expected_key" ] || fixation
 is_set GIT_CONFIG_VALUE_1 && [ "$GIT_CONFIG_VALUE_1" = "$expected_helper" ] || fixation=broken
 
 if [ "$fixation" = alive ]; then
-	fixation_label="イメージ固定: 生きている"
+	fixation_label="image fixation: alive"
 else
-	fixation_label="イメージ固定: 外れている (GIT_CONFIG_COUNT 系が上書きまたは欠落)"
+	fixation_label="image fixation: broken (GIT_CONFIG_COUNT family overridden or missing)"
 fi
 
 if [ -z "$actual_helper" ]; then
-	actual_label="(無し。askpass か端末のプロンプトへ落ちる)"
+	actual_label="(none; falls back to askpass or the terminal prompt)"
 else
 	actual_label="$actual_helper"
 fi
 
-echo "git-auth-check: 実効 helper=$actual_label / $fixation_label"
+echo "git-auth-check: effective helper=$actual_label; $fixation_label"
 
 exit 0

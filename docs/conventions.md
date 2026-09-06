@@ -62,3 +62,14 @@ compose の `environment:` に置くもの:
 - `CRIT_PUBLIC_URL` と `CRIT_ALLOW_UNAUTHENTICATED_NETWORK` — 後者は機能の有効化ではなく
   **承認**である。crit は「広告 URL が非空」と「listen が非 loopback」の両方を同じフラグで
   解除するため、イメージに焼くと後者の拒否まで消える。承認はそれを必要とする判断と同じ場所に置く
+
+## 出荷物のメッセージ言語
+
+イメージに焼き込む出荷物が利用者へ出すメッセージ（標準出力・標準エラー）は英語で書く。受け取る側が
+このリポジトリの外にいるためである。範囲は `images/*/bin`・`images/runtime-base/shims`・
+`packages/env-guard` の `bin` と `hooks`
+（`images/runtime-base/tests/shipped-symbols.test.sh` の lenient 検査が見ている範囲と同じ）。
+
+`images/runtime-base/templates/host` 配下（ホスト側ツールの usage を含む）はこの範囲の外である。
+
+コード内のコメントは日本語のままでよい。規約が縛るのは外へ出る文字列だけである。
