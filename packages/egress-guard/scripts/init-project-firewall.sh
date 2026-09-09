@@ -612,18 +612,25 @@ profile_has_bundle() {
 # in a fixed order, so the anchor is a property of the configuration and not of
 # the run.
 #
+# A leading dot entry is passed over: it spells a zone rather than a DNS name,
+# so it can never answer, and anchoring on it would panic a policy that is
+# working.
+#
 # Prints nothing when there is no domain to anchor on. That is a legitimate
-# configuration (CIDRs and host ports only), so the callers skip the check rather
-# than fail it.
+# configuration - CIDRs and host ports only, or nothing but leading dot entries
+# - so the callers skip the check rather than fail it.
 anchor_domain() {
 	if [ "${#PROFILE_DOMAINS[@]}" -gt 0 ]; then
 		printf '%s' "${PROFILE_DOMAINS[0]}"
 		return 0
 	fi
-	if [ "${#CFG_DOMAINS[@]}" -gt 0 ]; then
-		printf '%s' "${CFG_DOMAINS[0]}"
+	local domain
+	for domain in "${CFG_DOMAINS[@]:-}"; do
+		[ -n "$domain" ] || continue
+		[ "${domain:0:1}" = "." ] && continue
+		printf '%s' "$domain"
 		return 0
-	fi
+	done
 	return 0
 }
 
@@ -1031,6 +1038,15 @@ resolve_domain() {
 add_domain() {
 	local name="$1" added=0 rejected=0 ip
 
+	# A leading dot spells a zone, not a DNS name, so nothing answers for the
+	# string itself. Asking anyway warns on every run that the entry was skipped
+	# while the proxy ACL is enforcing it. Nothing is lost by not asking: only l7
+	# accepts the form, and l7 keeps no domain addresses in the set.
+	if [ "${name:0:1}" = "." ]; then
+		info "$name is allowed by the proxy ACL (the domain and every subdomain beneath it); not a DNS name, so it is not resolved"
+		return 1
+	fi
+
 	while read -r ip; do
 		# A name is not allowed to smuggle a private address into the allowlist.
 		# allowCidrs is checked against the same ranges; without this the DNS
@@ -1169,10 +1185,10 @@ build_allowlist() {
 		[ "$resolved_anchor" = "1" ] ||
 			die "the anchor domain did not resolve ($anchor); the container has no working network"
 	else
-		# A policy of nothing but CIDRs and host ports has no name to resolve, so
-		# there is no way to tell a dead network from an empty allowlist. Saying
-		# so is better than inventing a domain to probe.
-		warn "no domain is configured, so DNS liveness could not be checked"
+		# A policy of nothing but CIDRs, host ports and leading dot entries has no
+		# name to resolve, so there is no way to tell a dead network from an empty
+		# allowlist. Saying so is better than inventing a domain to probe.
+		warn "no domain to anchor on, so DNS liveness could not be checked"
 	fi
 
 	local cidr
@@ -1640,7 +1656,7 @@ self_verify() {
 		verify_step "DNS via the assigned resolver returns an answer" pass \
 			dns_answers "" "$anchor"
 	else
-		warn "verify SKIP: DNS resolution (no domain is configured to resolve)"
+		warn "verify SKIP: DNS resolution (no domain to anchor on)"
 	fi
 
 	# Probing a configured resolver would prove nothing, so pick one that is not.
@@ -1668,7 +1684,7 @@ self_verify() {
 		verify_step "allowed host is reachable ($anchor)" pass \
 			curl -sS -o /dev/null --connect-timeout 5 --max-time 15 "https://$anchor/"
 	else
-		warn "verify SKIP: allowed host reachability (no domain is configured to reach)"
+		warn "verify SKIP: allowed host reachability (no domain to anchor on)"
 	fi
 
 	if [ "$MODE" = "enforce" ]; then

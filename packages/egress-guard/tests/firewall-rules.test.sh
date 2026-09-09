@@ -207,6 +207,10 @@ case "$name" in
 		echo "169.254.169.254"; echo "192.168.1.5"; echo "203.0.113.55"
 		;;
 	allprivate.example.com) echo "169.254.169.254" ;;
+	# A leading dot spells a zone, so there is no such name to answer for. A stub
+	# that answered would hide the query the suite asserts is never made.
+	.*) ;;
+	nowhere.example.net) ;;
 	rotate.example.com)
 		# A CDN behind DNS round robin: the answer set moves between the run
 		# that builds the allowlist and the run that verifies it, keeping only
@@ -1761,6 +1765,69 @@ else
 fi
 assert_contains "the L3 layer still fetches the GitHub meta ranges" "$(cat "$WORK/log.l3github")" \
 	'^ipset add -exist egress-allow-v4 140\.82\.112\.0/20$'
+
+# --- leading dot domains -------------------------------------------------------
+#
+# The form l7 accepts for a whole zone: the domain and every subdomain, carried
+# by the proxy ACL. A resolver has no answer for the string itself, so the apply
+# path must not ask - while a plain name that does not resolve still has to be
+# reported.
+
+echo "leading dot domains"
+run_firewall l7dot '{"version":2,"layer":"l7","profile":["anthropic"],"allowDomains":[".example.com","nowhere.example.net"]}'
+if [ "$(cat "$WORK/rc.l7dot")" = "0" ]; then
+	ok "a config with a leading dot domain exits 0"
+else
+	ng "a config with a leading dot domain exits 0 (got $(cat "$WORK/rc.l7dot"))"
+	sed 's/^/    /' "$WORK/out.l7dot" >&2
+fi
+assert_absent "a leading dot domain is not resolved" "$(cat "$WORK/log.l7dot")" \
+	' A \.example\.com$'
+assert_absent "a leading dot domain produces no resolution warning" \
+	"$(cat "$WORK/out.l7dot")" 'failed to resolve \.example\.com'
+assert_contains "a leading dot domain is reported as allowed" \
+	"$(cat "$WORK/out.l7dot")" '\.example\.com is allowed by the proxy ACL'
+# The other half of the same guarantee: a name that is a name and does not
+# resolve is a configuration error or an outage, and stays worth a warning.
+assert_contains "an unresolvable domain is still reported by name" \
+	"$(cat "$WORK/out.l7dot")" 'failed to resolve nowhere\.example\.net'
+
+# Nothing but leading dot entries leaves no name to anchor the liveness check
+# on. That is a working policy, so it skips the check rather than panicking the
+# way an anchor that failed to resolve does.
+run_firewall l7dotonly '{"version":2,"layer":"l7","profile":[],"allowDomains":[".example.com"]}'
+if [ "$(cat "$WORK/rc.l7dotonly")" = "0" ]; then
+	ok "a policy of nothing but leading dot domains exits 0"
+else
+	ng "a policy of nothing but leading dot domains exits 0 (got $(cat "$WORK/rc.l7dotonly"))"
+	sed 's/^/    /' "$WORK/out.l7dotonly" >&2
+fi
+assert_contains "a leading dot domain is not taken as the anchor" \
+	"$(cat "$WORK/out.l7dotonly")" 'DNS liveness could not be checked'
+
+# The apply path does not resolve these entries; where they are actually
+# enforced must not be affected by that.
+FW_STATE="$WORK/state"
+mkdir -p "$FW_STATE"
+printf '%s' printdotacl >"$FW_STATE/run"
+rm -f "$FW_STATE/v4count" "$FW_STATE/entries" "$FW_STATE/rotate"
+: >"$WORK/log.printdotacl"
+printf '%s' '{"version":2,"layer":"l7","profile":["anthropic"],"allowDomains":[".example.com","nowhere.example.net"]}' \
+	>"$WORK/print-dot.json"
+rc=0
+acl="$(env "FW_LOG=$WORK/log.printdotacl" "FW_STATE=$FW_STATE" "PATH=$BIN:$PATH" \
+	bash "$FIREWALL_SH" --print-proxy-acl --config "$WORK/print-dot.json" 2>/dev/null)" || rc=$?
+if [ "$rc" -eq 0 ]; then
+	ok "--print-proxy-acl exits 0 on a config with a leading dot domain"
+else
+	ng "--print-proxy-acl exits 0 on a config with a leading dot domain (rc=$rc)"
+fi
+acl_expected="$(printf '%s\n' '.example.com' 'api.anthropic.com' 'nowhere.example.net')"
+if [ "$acl" = "$acl_expected" ]; then
+	ok "the proxy ACL is unchanged by the leading dot form"
+else
+	ng "the proxy ACL is unchanged by the leading dot form (got: $(printf '%s' "$acl" | tr '\n' ' '))"
+fi
 
 # --- result ------------------------------------------------------------------
 
