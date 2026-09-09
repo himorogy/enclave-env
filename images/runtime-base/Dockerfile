@@ -177,7 +177,14 @@ USER ${USERNAME}
 # npm のグローバル領域 (NPM_CONFIG_PREFIX) は node 所有のため、install は node の
 # まま実行する。root で入れると root 所有のファイルが混ざり、以後 node での
 # -g install が権限で失敗しうる。root が担当するのは配置と権限付与だけ。
-RUN npm install -g @himorogy/egress-guard@${EGRESS_GUARD_VERSION}
+# === 検証用の一時改変（main へは入れない） =====================================
+# publish 前の 0.3.0 を実機で確かめるため、npm ではなくビルドコンテキストの
+# tarball から入れる。COPY は USER を変えないので、install が node のまま走る
+# という上の前提は崩れない（eg.tgz は 644 で node から読める）。
+# 検証が済んだらこのブランチごと捨て、上の ARG 参照へ戻す。
+COPY eg.tgz /tmp/eg.tgz
+RUN npm install -g /tmp/eg.tgz
+# ===============================================================================
 
 USER root
 
