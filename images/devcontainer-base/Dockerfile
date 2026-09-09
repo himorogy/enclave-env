@@ -15,7 +15,10 @@ ARG CRIT_VERSION=v0.19.1
 # `ghcr.io/himorogy/runtime-base:` という壊れた参照になり、pull を試みる前に
 # 「invalid reference format」で落ちる。イメージが取得できないのとは別の失敗で、
 # エラーだけを読むと取り違えやすい。
-ARG RUNTIME_BASE_VERSION=1
+# 検証用の一時改変（main へは入れない）。publish 前の 0.3.0 を焼いた
+# runtime-base:edge の上に載せる。検証が済んだらこのブランチごと捨て、
+# 浮動タグ 1 へ戻す。
+ARG RUNTIME_BASE_VERSION=edge
 
 FROM --platform=$BUILDPLATFORM golang:1.26-bookworm AS crit-builder
 
