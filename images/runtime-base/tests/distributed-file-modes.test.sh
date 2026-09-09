@@ -1,15 +1,18 @@
 #!/usr/bin/env bash
 #
-# 配布物 (images/runtime-base/templates/host) の file mode の検査。
+# 配布物 (npm パッケージとして配られる面と、ホスト・利用側リポジトリへ配られる
+# テンプレート) の file mode の検査。
 #
-# host/ の中身はホスト側へそのまま配られ、karakuri.sh から名前で呼ばれる。
-# 実行ビットが落ちていると、利用側は最初のコマンドで止まり、そこから先の
-# 検証に着手すらできない。実際に host-run.sh が mode 100644 で記録された
-# まま配られ、clone した全ホストで `karakuri-run` が失敗した。
+# 配布物は受け取った側の手元でそのまま使われる。実行ビットが落ちていると、
+# 利用側は最初のコマンドで止まり、そこから先の検証に着手すらできない。実際に
+# host-run.sh が mode 100644 で記録されたまま配られ、clone した全ホストで
+# `karakuri-run` が失敗した。packages/egress-guard/scripts/init-project-firewall.sh は
+# templates/proxy/Dockerfile が絶対パスで直接実行するので、この面では利用側の
+# イメージのビルドが落ちる形で出る。
 #
 # 検査の対象は working tree ではなく git の index である。配られるのは
-# clone や git archive の結果であり、そこに載るのは index が持っている
-# mode だからである。working tree 側の mode は、exec ビットを持てない
+# clone や git archive、npm pack の結果であり、そこに載るのは index が持って
+# いる mode だからである。working tree 側の mode は、exec ビットを持てない
 # ファイルシステムや core.fileMode=false の環境で簡単に食い違う。
 #
 # 見るのは「実行して使うもの」と「読み込んで使うもの」の区別と mode の一致で
@@ -17,15 +20,31 @@
 # 一部ではない（「実行するスクリプトには shebang を書く」という別の規約を
 # 足しているのではない）。ファイルの一覧を持たないのは、区別が既にファイル
 # 自身に書かれているためである。一覧を別に置くと同じ判断の二重管理になり、
-# host/ にファイルが増えるたび一覧の更新漏れという別の壊れ方を作る。
+# ファイルが増えるたび一覧の更新漏れという別の壊れ方を作る。対象はディレクトリ
+# の単位でだけ書く。
 #
 # 中身も index から読む。working tree の shebang と index の mode を突き
 # 合わせると、どちらか一方だけがコミットされた状態で判定がずれる。
 #
+# images/runtime-base/bin と images/runtime-base/shims は配布物に見えるが、
+# この基準が当たらない面である。配られるのは clone の結果ではなくイメージで
+# あり、実行権は Dockerfile の chmod がビルド時に付ける。shebang を持ちながら
+# index が 100644 のファイルがそこに在るのは設計で、docs/guarantees.md の
+# C-2b がそれを約束として持っている。
+#
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
-HOST_DIR="images/runtime-base/templates/host"
+
+# 台帳「公開面の定義」のうち、ファイルとして配られる面。
+TARGET_DIRS=(
+	packages/env-guard/bin
+	packages/env-guard/hooks
+	packages/egress-guard/scripts
+	packages/egress-guard/templates
+	images/runtime-base/templates/host
+	images/runtime-base/templates/project
+)
 
 PASS=0
 FAIL=0
@@ -71,7 +90,6 @@ check_modes() {
 		rest="${line#* }"
 		sha="${rest%% *}"
 		path="${line#*$'\t'}"
-		path="${path#"$HOST_DIR"/}"
 		expected="$(expected_mode "$sha")"
 		if [ -z "$expected" ]; then
 			printf '%s: blob %s が読めない\n' "$path" "$sha"
@@ -85,25 +103,41 @@ check_modes() {
 	done
 }
 
+# listing_of <ディレクトリ> — 配下の tracked ファイルを `git ls-files -s` 形式で
+# stdout に出す。存在しないディレクトリでは空を出す。
+listing_of() {
+	git -C "$REPO_ROOT" ls-files -s -- "$1"
+}
+
+# count_lines <文字列> — 行数を stdout に出す。空文字列を分けているのは、
+# printf に通すと 0 行が 1 行に化けるためである。
+count_lines() {
+	if [ -z "$1" ]; then
+		printf '0\n'
+	else
+		printf '%s\n' "$1" | wc -l | tr -d ' '
+	fi
+}
+
 # --- 本番の一覧 ------------------------------------------------------------------
 
 command -v git >/dev/null 2>&1 || die "git が無いので index の mode を読めない"
 
-LISTING="$(git -C "$REPO_ROOT" ls-files -s -- "$HOST_DIR")" ||
-	die "git ls-files が失敗した ($HOST_DIR)"
+# 対象ディレクトリの綴りを間違えても、対象が丸ごと移動しても、走査結果が 0 件
+# なら「全部一致」と同じ緑になる。
+LISTING=""
+for dir in "${TARGET_DIRS[@]}"; do
+	listing="$(listing_of "$dir")" || die "git ls-files が失敗した ($dir)"
+	count="$(count_lines "$listing")"
+	if [ "$count" -ge 1 ]; then
+		ok "$dir の tracked ファイルを $count 件読んだ"
+	else
+		ng "$dir の tracked ファイルが 0 件 (綴り違いか、対象が移動した)"
+	fi
+	[ -z "$listing" ] || LISTING="${LISTING}${listing}"$'\n'
+done
 
-[ -n "$LISTING" ] || die "$HOST_DIR に tracked ファイルが 1 件も無い"
-
-# 対象が丸ごと移動した場合に「0 件見て緑」へ倒れないよう、既知の下限を置く。
-# 件数そのものに意味は無く、一覧が空でないことより一段強い歯止めとして使う。
-COUNT="$(printf '%s\n' "$LISTING" | wc -l | tr -d ' ')"
-if [ "$COUNT" -ge 10 ]; then
-	ok "$HOST_DIR の tracked ファイルを $COUNT 件読んだ"
-else
-	ng "$HOST_DIR の tracked ファイルが $COUNT 件しか無い (対象が移動した可能性)"
-fi
-
-VIOLATIONS="$(printf '%s\n' "$LISTING" | check_modes)"
+VIOLATIONS="$(printf '%s' "$LISTING" | check_modes)"
 if [ -z "$VIOLATIONS" ]; then
 	ok "配布物の mode が、実行して使うものと読み込んで使うものの区別と一致する"
 else
@@ -120,11 +154,12 @@ fi
 # sha では判定そのものが走らない。
 
 blob_of() {
-	git -C "$REPO_ROOT" ls-files -s -- "$HOST_DIR/$1" | awk '{print $2}'
+	git -C "$REPO_ROOT" ls-files -s -- "$1" | awk '{print $2}'
 }
 
-SHEBANG_BLOB="$(blob_of host-run.sh)"
-PLAIN_BLOB="$(blob_of karakuri.sh)"
+HOST_DIR="images/runtime-base/templates/host"
+SHEBANG_BLOB="$(blob_of "$HOST_DIR/host-run.sh")"
+PLAIN_BLOB="$(blob_of "$HOST_DIR/karakuri.sh")"
 [ -n "$SHEBANG_BLOB" ] || die "否定対照の材料 (host-run.sh) が見つからない"
 [ -n "$PLAIN_BLOB" ] || die "否定対照の材料 (karakuri.sh) が見つからない"
 
@@ -169,6 +204,14 @@ if [ -z "$(printf '%s\n' "$sample" | check_modes)" ]; then
 	ok "否定対照: 正しい mode の一覧を誤検知しない"
 else
 	ng "否定対照: 正しい mode の一覧を誤検知しない"
+fi
+
+# 綴りを間違えたディレクトリは、エラーではなく空の一覧として返ってくる。上の
+# 歯止めが働くのはこの形に対してである。
+if [ "$(count_lines "$(listing_of "${HOST_DIR}s")")" = 0 ]; then
+	ok "否定対照: 綴りの違うディレクトリは 0 件として出る"
+else
+	ng "否定対照: 綴りの違うディレクトリは 0 件として出る"
 fi
 
 # --- result ----------------------------------------------------------------------
