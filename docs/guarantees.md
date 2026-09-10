@@ -440,12 +440,13 @@ Windows 用のラッパーの検査だけは cmd.exe を要するため、この
 - 導出も報告も、失敗を呼び出し元へ伝播させない。常に 0 で終わり、読み込んだシェルの起動を
   止めない（テスト: "導出が失敗しても 0 で終わる"）（起源: `0018a-git-identity-after-inject`）
 
-### 23. `images/runtime-base/tests/host-file-modes.test.sh` — 配布テンプレートの file mode
+### 23. `images/runtime-base/tests/distributed-file-modes.test.sh` — 配布物の file mode
 
 起源: `0014a-host-template-file-modes`
 
-- ホストへ配るテンプレート一式のうち、実行して使うスクリプトは、clone した先でそのまま実行できる。受け取った側が mode を直す手順を要求されることはない
+- ホストと利用側リポジトリへ配るテンプレート一式のうち、実行して使うスクリプトは、clone した先でそのまま実行できる。受け取った側が mode を直す手順を要求されることはない
 - 逆に、読み込んで使うファイル（source される関数集・compose・plist・Windows 用ラッパー）は実行可能にならない。PATH 上の `shims/` から誤って起動される経路を作らない
+- npm パッケージとして配られる面（`@himorogy/env-guard` の `bin` と `hooks`、`@himorogy/egress-guard` の `scripts` と `templates`）でも同じく、実行して使うスクリプトはそのまま実行でき、読み込んで使うファイルは実行可能にならない。受け取った側が mode を直す手順を要求されることはない（起源: `0014b-public-surface-file-modes`）
 
 ## Unverified Promises
 
