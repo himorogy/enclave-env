@@ -31,6 +31,9 @@
 		"README.md"
 	],
 	"publishConfig": {
-		"access": "public"
+		"access": "public",
+		"executableFiles": [
+			"scripts/init-project-firewall.sh"
+		]
 	}
 }

@@ -73,3 +73,30 @@ compose の `environment:` に置くもの:
 `images/runtime-base/templates/host` 配下（ホスト側ツールの usage を含む）はこの範囲の外である。
 
 コード内のコメントは日本語のままでよい。規約が縛るのは外へ出る文字列だけである。
+
+## 配布物の実行可能性
+
+**実行して使うかどうかは shebang の有無で表明し、ファイルの一覧を別に持たない。**
+`images/runtime-base/tests/distributed-file-modes.test.sh` と
+`.github/scripts/check-published-modes.sh` はどちらもこの規約に依存している——
+検査の側は対象を1件ずつ列挙するチェックリストを持たない。列挙を持つのは宣言側の
+`publishConfig.executableFiles` であり、そちらは更新漏れが起きる（`files` に
+shebang 付きのファイルが増えたのに列挙へ足し忘れる形。現に env-guard の
+`hooks/pre-commit` で一度起きた）。検査は shebang の有無と実際の mode を
+突き合わせることで、その漏れを拾う。
+
+**発見しにくい事実。** pnpm（2026-09-10 実測、pnpm 11.25.0）が publish 用の
+tarball に入れる各ファイルの mode は、ソースの mode を読まずに決まる。読むのは
+`package.json` の `bin` フィールドと `publishConfig.executableFiles` の列挙だけで、
+どちらにも載っていないファイルは元が 755 でも 644 になる（同時点の npm 11.17.0 は
+ソースの mode をそのまま使うため、この挙動は pnpm 固有）。したがって公開物の
+mode は git index を見る検査（`distributed-file-modes.test.sh`）では担保できない。
+担保しているのは tarball の中身を見る検査
+（`.github/scripts/check-published-modes.sh`）で、`.github/workflows/release.yml` の
+build ジョブが `pnpm pack` で作った tarball に対して呼ぶ。publish ジョブは
+`needs: build` でこれに従属するため、検査は結果として publish より前に効く。
+publish ジョブ自身に置かない理由は、`pnpm pack`（同時点、pnpm 11.25.0）が
+`prepack` 等のライフサイクルスクリプトを無効化するオプションを持たないため
+（`pnpm publish --ignore-scripts` とは異なる）。publish ジョブは `id-token: write`
+を持ち、第三者のコードを一切実行しない方針を取っている（`docs/secure-publish.md`
+§4.3）。

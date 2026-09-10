@@ -33,6 +33,9 @@
 		"README.md"
 	],
 	"publishConfig": {
-		"access": "public"
+		"access": "public",
+		"executableFiles": [
+			"hooks/pre-commit"
+		]
 	}
 }
