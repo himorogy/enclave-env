@@ -5,6 +5,7 @@ base: main
 targets:
   - docs/guarantees.md
   - images/runtime-base/tests/distributed-file-modes.test.sh
+  - images/runtime-base/tests/host-file-modes.test.sh
   - images/runtime-base/tests/run.sh
 verify:
   - pnpm lint

@@ -24,9 +24,6 @@ bash "$SCRIPT_DIR/hook.test.sh"
 # 次に書けば戻るので、検査として置いている。
 bash "$SCRIPT_DIR/shipped-symbols.test.sh"
 
-# npm パッケージとテンプレートとして配られるスクリプトが、実行できる mode で
-# 記録されていることの検査。実行ビットが落ちた配布物は、利用側が最初のコマンドで
-# 止まるため、着手すらできない。
 bash "$SCRIPT_DIR/distributed-file-modes.test.sh"
 
 # example/ の compose と配布テンプレートの compose が一致することの検査。
