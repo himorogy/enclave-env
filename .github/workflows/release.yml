@@ -164,6 +164,19 @@ jobs:
           # 存在するときだけ実行する。
           pnpm --filter "$NAME" run --if-present build
 
+      # pnpm pack にはライフサイクルスクリプトを無効化するオプションが無い
+      # （docs/conventions.md「配布物の実行可能性」）。id-token を持つ publish
+      # ジョブではなく、第三者のコードが動いてよい前提のこのジョブに検査を置く
+      # のはそのため（docs/secure-publish.md §4.3）。落ちていたら公開しない
+      # ——publish ジョブは needs: build なので、環境承認の前に止まる。
+      - name: 公開される tarball の mode を検査する
+        working-directory: ${{ needs.prepare.outputs.dir }}
+        run: |
+          set -eu
+          CHECK_DIR="$(mktemp -d)"
+          pnpm pack --pack-destination "$CHECK_DIR"
+          "$GITHUB_WORKSPACE/.github/scripts/check-published-modes.sh" "$CHECK_DIR"/*.tgz
+
       # 公開ジョブへ渡すのは、公開対象のディレクトリのみ。
       # node_modules は渡さない。
       - name: 成果物を退避する

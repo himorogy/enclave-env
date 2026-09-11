@@ -440,7 +440,7 @@ Windows 用のラッパーの検査だけは cmd.exe を要するため、この
 - 導出も報告も、失敗を呼び出し元へ伝播させない。常に 0 で終わり、読み込んだシェルの起動を
   止めない（テスト: "導出が失敗しても 0 で終わる"）（起源: `0018a-git-identity-after-inject`）
 
-### 23. `images/runtime-base/tests/distributed-file-modes.test.sh` — 配布物の file mode
+### 23. `images/runtime-base/tests/distributed-file-modes.test.sh`、`.github/scripts/tests/check-published-modes.test.sh` — 配布物の file mode
 
 起源: `0014a-host-template-file-modes`
 
